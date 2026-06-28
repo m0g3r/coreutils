@@ -3,7 +3,7 @@
 // For the full copyright and license information, please view the LICENSE
 // file that was distributed with this source code.
 
-// spell-checker:ignore langinfo charmap eucjp euckr euctw CTYPE HKSCS hkscs localedata
+// spell-checker:ignore langinfo charmap eucjp euckr euctw CTYPE HKSCS hkscs localedata iswblank
 
 //! Locale-aware multi-byte character length detection via `LC_CTYPE`.
 
@@ -13,6 +13,7 @@ use std::sync::OnceLock;
 /// concerned. `SingleByte` covers `C`/`POSIX` and every 8-bit encoding.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Encoding {
+    /// C/POSIX and every 8-bit encoding: each byte is its own character.
     SingleByte,
     Utf8,
     Gb18030,
@@ -44,6 +45,8 @@ pub fn locale_encoding() -> Encoding {
             .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()));
         let s = match val.as_deref() {
             Some(s) if s != "C" && s != "POSIX" => s,
+            // Explicit C/POSIX locale, or no locale set at all: the POSIX
+            // default is `C`, which is byte-oriented.
             _ => return Encoding::SingleByte,
         };
         if let Some(enc) = s.split('.').nth(1) {
@@ -70,22 +73,54 @@ impl Encoding {
         if b0 <= 0x7F {
             return 1;
         }
-        match self {
-            // `C`/`POSIX` and unknown encodings have `MB_CUR_MAX == 1`, but we
-            // still decode UTF-8 there as a sensible default for byte-length
-            // detection.
-            Self::SingleByte | Self::Utf8 => utf8_len(bytes, b0),
+        let len = match self {
+            // `C`/`POSIX` and 8-bit encodings have `MB_CUR_MAX == 1`, so a byte
+            // is never part of a longer character, even when it would form a
+            // valid UTF-8 sequence.
+            Self::SingleByte => 1,
+            Self::Utf8 => utf8_len(bytes, b0),
             Self::Gb18030 => gb18030_len(bytes, b0),
             Self::EucJp => eucjp_len(bytes, b0),
             Self::EucKr => euckr_len(bytes, b0),
             Self::Big5 => big5_len(bytes, b0),
-        }
+        };
+        debug_assert!((1..=bytes.len()).contains(&len));
+        len
     }
 }
 
 /// Byte length of the first character in `bytes` under the current locale encoding.
 pub fn mb_char_len(bytes: &[u8]) -> usize {
     locale_encoding().char_len(bytes)
+}
+
+/// If the first character in `bytes` is horizontal whitespace ("blank") in the
+/// current locale, return its byte length; otherwise `None`.
+///
+/// ASCII space and tab always count. In a UTF-8 locale the Unicode space
+/// separators are also recognized, except no-break ones (e.g. U+00A0), matching
+/// glibc's `iswblank`.
+pub fn mb_blank_len(bytes: &[u8]) -> Option<usize> {
+    let len = mb_char_len(bytes);
+    if len == 1 {
+        return (bytes[0] == b' ' || bytes[0] == b'\t').then_some(1);
+    }
+    // `char_len` only looks at the shape of the sequence, so decode it for real
+    // here: an overlong or surrogate encoding is not a character at all, and
+    // must not pass for one of the blanks it decodes to.
+    if locale_encoding() == Encoding::Utf8
+        && std::str::from_utf8(&bytes[..len]).is_ok_and(|s| s.starts_with(is_unicode_blank))
+    {
+        return Some(len);
+    }
+    None
+}
+
+/// Horizontal whitespace characters (glibc `iswblank`): excludes the
+/// no-break variants U+00A0, U+2007 and U+202F.
+fn is_unicode_blank(c: char) -> bool {
+    matches!(c,
+        '\u{09}' | '\u{20}' | '\u{1680}' | '\u{2000}'..='\u{2006}' | '\u{2008}'..='\u{200A}' | '\u{205F}' | '\u{3000}')
 }
 
 // All helpers below assume b0 > 0x7F (ASCII already handled by caller).

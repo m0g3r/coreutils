@@ -396,6 +396,8 @@ fn test_gnu_escape_sequences() {
 fn test_multi_byte_delimiter() {
     for option_style in ["-d", "--delimiters"] {
         new_ucmd!()
+            // A multibyte delimiter is stepped per character in a UTF-8 locale.
+            .env("LC_ALL", "C.UTF-8")
             .args(&[option_style, "!ß@", "-s"])
             .pipe_in(
                 "\
@@ -427,7 +429,9 @@ fn test_data() {
             ins.push(file);
         }
         println!("{}", example.name);
-        ucmd.args(example.args)
+        // Some examples use multibyte delimiters, which need a UTF-8 locale.
+        ucmd.env("LC_ALL", "C.UTF-8")
+            .args(example.args)
             .args(&ins)
             .succeeds()
             .stdout_is(example.out);
