@@ -113,3 +113,7 @@ cut-error-missing-mode-arg = usage invalide : attend une des options --fields (-
 cut-error-delimiter-only-with-fields = entrée invalide : L'option '--delimiter' ('-d') n'est utilisable que si on affiche une séquence de champs
 cut-error-whitespace-only-with-fields = entrée invalide : L'option '-w' n'est utilisable que si on affiche une séquence de champs
 cut-error-only-delimited-only-with-fields = entrée invalide : L'option '--only-delimited' ('-s') n'est utilisable que si on affiche une séquence de champs
+
+# Étiquettes de diagnostic : ce que le caret désigne dans une liste d'intervalles
+cut-diag-label-zero-bound = le décompte commence à 1
+cut-diag-help-list-syntax = une liste s'écrit N, N-M, N- ou -M, séparés par des virgules, comme -f1,4-6,9-

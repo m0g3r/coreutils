@@ -62,7 +62,7 @@ impl<'a> From<&'a OsString> for Delimiter<'a> {
     }
 }
 
-fn list_to_ranges(list: &str, complement: bool) -> Result<Vec<Range>, String> {
+fn list_to_ranges(list: &str, complement: bool) -> Result<Vec<Range>, uucore::ranges::RangeError> {
     if complement {
         Range::from_list(list).map(|r| uucore::ranges::complement(&r))
     } else {
@@ -745,6 +745,11 @@ mod options {
 
 #[uucore::main]
 pub fn uumain(args: impl uucore::Args) -> UResult<()> {
+    let args: Vec<OsString> = args.collect();
+    // Kept for the caret in list diagnostics, which needs the arguments as
+    // they were typed, before the rewrite below edits one of them.
+    let diag_args = uucore::diagnostics::capture(&args);
+
     // GNU `cut` supports `-d=` to set the delimiter to `=`.
     // Clap parsing is limited in this situation, see:
     // https://github.com/uutils/coreutils/issues/2424#issuecomment-863825242
@@ -769,7 +774,21 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
     let list = matches
         .get_one::<String>(mode_arg)
         .expect("should be ensured by get_mode_arg");
-    let ranges = list_to_ranges(list, complement).map_err(|e| USimpleError::new(1, e))?;
+    let ranges = list_to_ranges(list, complement).map_err(|e| {
+        // The list is the value of the option that selected the mode, so the
+        // caret can be put under the one range that is at fault.
+        let reported = diag_args.as_ref().is_some_and(|args| {
+            e.render_option_value(
+                args,
+                list,
+                Some(mode_arg_short(mode_arg)),
+                Some(mode_arg),
+                &translate!("cut-diag-label-zero-bound"),
+                &translate!("cut-diag-help-list-syntax"),
+            )
+        });
+        uucore::error::quiet_if_reported(reported, USimpleError::new(1, e.message))
+    })?;
 
     let mode = match mode_arg {
         options::BYTES => Mode::Bytes(
@@ -866,6 +885,16 @@ fn get_mode_arg(matches: &ArgMatches) -> UResult<&str> {
     }
 
     Ok(mode_arg)
+}
+
+/// The short name of a mode option, since the caret has to recognise the value
+/// however it was written: `-f2-`, `-f 2-` or `--fields=2-`.
+fn mode_arg_short(mode_arg: &str) -> char {
+    match mode_arg {
+        options::BYTES => 'b',
+        options::CHARACTERS => 'c',
+        _ => 'f',
+    }
 }
 
 pub fn uu_app() -> Command {

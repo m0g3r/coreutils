@@ -113,3 +113,7 @@ cut-error-missing-mode-arg = invalid usage: expects one of --fields (-f), --char
 cut-error-delimiter-only-with-fields = invalid input: The '--delimiter' ('-d') option can only be used when printing a sequence of fields
 cut-error-whitespace-only-with-fields = invalid input: The '-w' option can only be used when printing a sequence of fields
 cut-error-only-delimited-only-with-fields = invalid input: The '--only-delimited' ('-s') option can only be used when printing a sequence of fields
+
+# Diagnostic labels: what the caret points at in a list of ranges
+cut-diag-label-zero-bound = counting starts at 1
+cut-diag-help-list-syntax = a list is N, N-M, N- or -M, separated by commas, as in -f1,4-6,9-
