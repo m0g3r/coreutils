@@ -2969,16 +2969,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "string-interner"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad3df9b59e2eded8d825c7c4363ad339a20fb6bc0b9a4778560f518f59910b15"
-dependencies = [
- "hashbrown 0.16.1",
- "serde",
-]
-
-[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4446,7 +4436,6 @@ dependencies = [
  "fluent",
  "rustc-hash",
  "rustix",
- "string-interner",
  "thiserror 2.0.20",
  "uucore",
 ]

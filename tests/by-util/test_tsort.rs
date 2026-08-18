@@ -97,6 +97,94 @@ fn test_split_on_any_whitespace() {
         .stdout_only("a\nb\n");
 }
 
+/// Tokens that are not valid UTF-8 must be passed through unchanged.
+///
+/// This is the input from GNU issue report #12918: GNU `tsort` sorts the
+/// `0xFF` node like any other and writes the byte back out verbatim.
+#[test]
+fn test_non_utf8_tokens_from_file() {
+    let (at, mut ucmd) = at_and_ucmd!();
+    at.write_bytes(
+        "f",
+        b"hrllo\nawuyues\napple\niphone\niphone\na\n\xff\n\xff\n",
+    );
+
+    ucmd.arg("f")
+        .succeeds()
+        .stdout_only_bytes(b"apple\nhrllo\n\xff\niphone\nawuyues\na\n".as_slice());
+}
+
+#[test]
+fn test_non_utf8_tokens_from_stdin() {
+    new_ucmd!()
+        .pipe_in(b"\xff \xfe\n".as_slice())
+        .succeeds()
+        .stdout_only_bytes(b"\xff\n\xfe\n".as_slice());
+}
+
+/// Invalid UTF-8 in the middle of an otherwise ASCII token is kept as-is.
+#[test]
+fn test_non_utf8_inside_token() {
+    new_ucmd!()
+        .pipe_in(b"a\xff b\xfe\n".as_slice())
+        .succeeds()
+        .stdout_only_bytes(b"a\xff\nb\xfe\n".as_slice());
+}
+
+/// A cycle whose node names are not valid UTF-8 is still reported, with the
+/// node names written to stderr as raw bytes.
+#[test]
+fn test_cycle_with_non_utf8_node() {
+    let (at, mut ucmd) = at_and_ucmd!();
+    at.write_bytes("f", b"\xff b\nb \xff\n");
+
+    ucmd.arg("f")
+        .fails_with_code(1)
+        .stdout_is_bytes(b"b\n\xff\n".as_slice())
+        .stderr_is_bytes(b"tsort: f: input contains a loop:\ntsort: b\ntsort: \xff\n".as_slice());
+}
+
+/// Only space, tab and newline separate tokens, as documented in `--help`.
+/// A carriage return is part of the token that contains it.
+#[test]
+fn test_carriage_return_is_not_a_separator() {
+    new_ucmd!()
+        .pipe_in(b"a\r b\n".as_slice())
+        .succeeds()
+        .stdout_only_bytes(b"a\r\nb\n".as_slice());
+}
+
+/// A vertical tab does not separate tokens either, so this input holds a
+/// single token and the token count is odd.
+#[test]
+fn test_vertical_tab_is_not_a_separator() {
+    new_ucmd!()
+        .pipe_in(b"a\x0bb\n".as_slice())
+        .fails_with_code(1)
+        .stdout_is("")
+        .stderr_is(TSORT_ODD_ERROR);
+}
+
+/// Same for a form feed.
+#[test]
+fn test_form_feed_is_not_a_separator() {
+    new_ucmd!()
+        .pipe_in(b"a\x0cb\n".as_slice())
+        .fails_with_code(1)
+        .stdout_is("")
+        .stderr_is(TSORT_ODD_ERROR);
+}
+
+/// Non-ASCII Unicode whitespace is part of a token, not a separator.
+#[test]
+fn test_unicode_whitespace_is_not_a_separator() {
+    new_ucmd!()
+        .pipe_in("a\u{a0}b\n".as_bytes())
+        .fails_with_code(1)
+        .stdout_is("")
+        .stderr_is(TSORT_ODD_ERROR);
+}
+
 #[test]
 fn test_cycle() {
     // The graph looks like:  a --> b <==> c --> d

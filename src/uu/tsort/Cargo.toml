@@ -20,7 +20,6 @@ doctest = false
 [dependencies]
 clap = { workspace = true }
 fluent = { workspace = true }
-string-interner = { workspace = true }
 thiserror = { workspace = true }
 uucore = { workspace = true }
 rustc-hash = { workspace = true }
